@@ -1,6 +1,6 @@
 name: OrangeFox - Build
-
-on: self-hosted
+runs-on: self-hosted
+on:
   workflow_dispatch:
     inputs:
       MANIFEST_BRANCH:
