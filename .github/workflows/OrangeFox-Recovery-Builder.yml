@@ -6,7 +6,7 @@ on:
       MANIFEST_BRANCH:
         description: 'OrangeFox Branch'
         required: true
-        default: '12.1'
+        default: '14.1'
         type: choice
         options:
         - 14.1
@@ -15,19 +15,19 @@ on:
       DEVICE_TREE:
         description: 'Custom Recovery Tree'
         required: true
-        default: 'https://github.com/kinguser981/android_device_xiaomi_marble-OFRP'
+        default: 'https://github.com/devhunter1/android_kernel_samsung_s5e8535'
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch'
         required: true
-        default: 'fox_12.1'
+        default: 'fox_14.1'
       DEVICE_PATH:
         description: 'Specify your device path.'
         required: true
-        default: 'device/xiaomi/marble'
+        default: 'device/samsung/m14x'
       DEVICE_NAME:
         description: 'Specify your Device Codename.'
         required: true
-        default: 'marble'
+        default: 'm14x'
       BUILD_TARGET:
         description: 'Specify your Build Target'
         required: true
