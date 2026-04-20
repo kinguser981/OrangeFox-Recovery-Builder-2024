@@ -6,7 +6,7 @@ on:
       MANIFEST_BRANCH:
         description: 'OrangeFox Branch'
         required: true
-        default: '12.1'
+        default: '14.1'
         type: choice
         options:
         - 14.1
@@ -15,19 +15,19 @@ on:
       DEVICE_TREE:
         description: 'Custom Recovery Tree'
         required: true
-        default: 'https://github.com/kinguser981/android_device_xiaomi_marble-OFRP'
+        default: 'https://github.com/sxmc7/device_oneplus_PKR110'
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch'
         required: true
-        default: 'fox_12.1'
+        default: 'master'
       DEVICE_PATH:
         description: 'Specify your device path.'
         required: true
-        default: 'device/xiaomi/marble'
+        default: 'device/oneplus/PKR110'
       DEVICE_NAME:
         description: 'Specify your Device Codename.'
         required: true
-        default: 'marble'
+        default: 'PKR110'
       BUILD_TARGET:
         description: 'Specify your Build Target'
         required: true
@@ -54,7 +54,7 @@ on:
 
 jobs:
   build:
-    name: Build OFRP by ${{ github.actor }}
+    name: Build OFRP for ${{ github.event.inputs.DEVICE_NAME }} by ${{ github.actor }}
     runs-on: ubuntu-latest
     if: github.event.repository.owner.id == github.event.sender.id
     env:
@@ -94,8 +94,8 @@ jobs:
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/OrangeFox
         cd ${GITHUB_WORKSPACE}/OrangeFox
-        git config --global user.name "Samuel Kendall"
-        git config --global user.email "kinguser981@gmail.com"
+        git config --global user.name "${{ github.actor }}"
+        git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
         git clone https://gitlab.com/OrangeFox/sync.git
         cd sync
         ./orangefox_sync.sh --branch ${{ github.event.inputs.MANIFEST_BRANCH }} --path ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
@@ -107,14 +107,6 @@ jobs:
         cd ${{ github.event.inputs.DEVICE_PATH }}
         echo "COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
-    - name: Check Manifest Branch
-      uses: haya14busa/action-cond@v1
-      id: fox_branch
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == '11.0' || github.event.inputs.MANIFEST_BRANCH == '12.1' }}
-        if_true: lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
-        if_false: lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image
-      
     - name: Building OrangeFox
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
@@ -122,9 +114,10 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         set -e
-        ${{ steps.fox_branch.outputs.value }}
+        # 使用 omni_ 前缀（与设备树中的 PRODUCT_NAME 一致）
+        lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
 
-    - name: Set Build Date # Output will be use in Release
+    - name: Set Build Date
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
         DEVICE_TREE_URL="${{ github.event.inputs.DEVICE_TREE }}"
@@ -146,44 +139,40 @@ jobs:
             echo "MD5_IMG=$(md5sum out/target/product/${{ github.event.inputs.DEVICE_NAME }}/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox*.img | cut -d ' ' -f 1)" >> $GITHUB_ENV
         else
             echo "Recovery out directory is empty."
-            cd Exit
+            exit 1
         fi
 
     - name: Rename the Recovery
       run: |
         cd ${{ env.FILE_PATH }}/
         if [ "${{ github.event.inputs.BUILD_TARGET }}" = "boot" ]; then
-        mv OrangeFox*.img boot.img
-        echo "RECOVERY_TYPE=boot" >> $GITHUB_ENV
-        echo "boot.img file found!"
+          mv OrangeFox*.img boot.img
+          echo "RECOVERY_TYPE=boot" >> $GITHUB_ENV
         elif [ "${{ github.event.inputs.BUILD_TARGET }}" = "recovery" ]; then
-        mv OrangeFox*.img recovery.img
-        echo "RECOVERY_TYPE=recovery" >> $GITHUB_ENV
-        echo "recovery.img file found!"
+          mv OrangeFox*.img recovery.img
+          echo "RECOVERY_TYPE=recovery" >> $GITHUB_ENV
         elif [ "${{ github.event.inputs.BUILD_TARGET }}" = "vendorboot" ]; then
-        mv OrangeFox*.img vendor_boot.img
-        echo "RECOVERY_TYPE=vendor_boot" >> $GITHUB_ENV
-        echo "vendor_boot.img file found!"
+          mv OrangeFox*.img vendor_boot.img
+          echo "RECOVERY_TYPE=vendor_boot" >> $GITHUB_ENV
         else
-        echo "No Recovery file found!"
+          echo "No Recovery file found!"
+          exit 1
         fi
       continue-on-error: true
       
     - name: Include Recovery Installer
+      if: github.event.inputs.RECOVERY_INSTALLER == 'true'
       run: |
-        if [ ${{ github.event.inputs.RECOVERY_INSTALLER }} = true ]; then
-          cd ${{ env.FILE_PATH }}/
-          wget https://github.com/kinguser981/recovery-installer/releases/download/11256427880/recovery-installer.zip
-          zip -ur recovery-installer.zip ${{ env.RECOVERY_TYPE }}.img
-        fi
+        cd ${{ env.FILE_PATH }}/
+        wget https://github.com/kinguser981/recovery-installer/releases/download/11256427880/recovery-installer.zip
+        zip -ur recovery-installer.zip ${{ env.RECOVERY_TYPE }}.img
       continue-on-error: true
         
     - name: Recovery to tar for Samsung devices
+      if: github.event.inputs.RECOVERY_TAR == 'true'
       run: |
-        if [ ${{ github.event.inputs.RECOVERY_TAR }} = true ]; then
-          cd ${{ env.FILE_PATH }}/
-          tar -cvf ${{ env.RECOVERY_TYPE }}.tar ${{ env.RECOVERY_TYPE }}.img
-        fi
+        cd ${{ env.FILE_PATH }}/
+        tar -cvf ${{ env.RECOVERY_TYPE }}.tar ${{ env.RECOVERY_TYPE }}.img
       continue-on-error: true
 
     - name: Upload to Release
@@ -204,7 +193,7 @@ jobs:
           
     - name: Release ramdisk-recovery
       if: env.CHECK_IMG_IS_OK == 'true'
-      uses: softprops/action-gh-release@4634c16e79c963813287e889244c50009e7f0981
+      uses: softprops/action-gh-release@v1
       with:
         files: |
           ${{ env.FILE_PATH }}/obj/PACKAGING/vendor_ramdisk_fragments_intermediates/recovery.*
@@ -214,7 +203,7 @@ jobs:
         body: |
           Target: ${{ env.RECOVERY_TYPE }}.img
           Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ env.DEVICE_TREE_URL }}/tree/${{ inputs.DEVICE_TREE_BRANCH }})
+          Device: [Device Tree/Branch](${{ env.DEVICE_TREE_URL }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
           Commit: Most recent [commit](${{ env.DEVICE_TREE_URL }}/commit/${{ env.COMMIT_ID }}) during building.
           MD5 (img): ${{ env.MD5_IMG }}
           
